@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#efece4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="metro eta">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<title>metro // eta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#efece4; --panel:#e6e2d7; --fg:#1b1f26; --dim:#6a717c; --line:#cfc9ba;
+  --acc:#b45f00; --warn:#b3401a; --err:#b3261e; --scan:rgba(0,0,0,.035); --glow:none;
+  --led:#ffb43a; --ledbg:#07090c;
+  color-scheme:light dark;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b0d10; --panel:#12151a; --fg:#d9dde3; --dim:#7d8794; --line:#232932;
+    --acc:#ffb43a; --warn:#ff7a45; --err:#ff6b6b; --scan:rgba(0,0,0,.28); --glow:0 0 10px rgba(255,180,58,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b0d10; --panel:#12151a; --fg:#d9dde3; --dim:#7d8794; --line:#232932;
+  --acc:#ffb43a; --warn:#ff7a45; --err:#ff6b6b; --scan:rgba(0,0,0,.28); --glow:0 0 10px rgba(255,180,58,.35);
+}
+:root.kb{padding-bottom:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px);background:var(--bg)}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg);color:var(--fg);overflow:hidden;overscroll-behavior:none;
+  font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-size:14px;line-height:1.5;-webkit-text-size-adjust:100%;text-size-adjust:100%;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:pointer}
+#app{position:relative;height:100%;max-width:760px;margin:0 auto;display:flex;flex-direction:column;background:var(--bg)}
+#app::after{
+  content:"";position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:5;
+  background:repeating-linear-gradient(0deg,var(--scan) 0 1px,transparent 1px 3px);
+}
+
+/* ---------- status bar ---------- */
+.bar{
+  flex:none;display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:9px 14px;background:var(--panel);border-bottom:1px solid var(--line);
+  font-size:12px;color:var(--dim);white-space:nowrap;
+}
+.bar b{color:var(--acc);font-weight:700}
+.bar .r{display:flex;gap:10px;align-items:center;min-width:0}
+#mode{overflow:hidden;text-overflow:ellipsis}
+#clock{color:var(--fg);font-weight:500}
+
+/* ---------- log ---------- */
+#log{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:14px 14px 6px}
+.blk{margin-bottom:18px}
+.cmd{color:var(--dim);display:flex;gap:8px;align-items:baseline;word-break:break-word}
+.cmd .ps{color:var(--acc);font-weight:700}
+.cmd .q{color:var(--fg)}
+.lv{margin-left:auto;font-size:11px;color:var(--acc);white-space:nowrap}
+.lv::before{content:"●";margin-right:5px;animation:blink 1.4s steps(2,end) infinite}
+@keyframes blink{50%{opacity:.15}}
+.out{margin-top:8px}
+.frozen .eta{color:#7d8794;text-shadow:none}
+.frozen .pb i{opacity:.4}
+.frozen .led{opacity:.8}
+
+.ban{margin:0 0 6px;white-space:pre;font:inherit;color:var(--acc);text-shadow:var(--glow);line-height:1.25;overflow:hidden}
+.boot div{opacity:0}
+.boot.go div{animation:in .25s ease forwards}
+@keyframes in{to{opacity:1}}
+.dim{color:var(--dim)}
+.acc{color:var(--acc)}
+.err{color:var(--err)}
+
+/* ---------- station / stop plaque ---------- */
+.sh{position:relative;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px 10px 20px;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.sh::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--st,var(--acc))}
+.sn{font-size:19px;font-weight:700;letter-spacing:-.01em;color:var(--fg);overflow-wrap:anywhere}
+.bd{display:inline-flex;gap:4px;align-items:center}
+.lb{display:inline-flex;align-items:center;justify-content:center;min-width:21px;height:21px;padding:0 6px;border-radius:5px;font-size:11px;font-weight:700;box-sizing:border-box}
+
+.ln{margin:12px 0;padding:10px 12px 12px;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:4px}
+.lh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ln-n{font-weight:700}
+.hw{margin-left:auto;font-size:11px;color:var(--dim)}
+.dir{display:grid;grid-template-columns:1fr auto;gap:0 12px;align-items:center;padding-top:12px}
+.dir + .dir{margin-top:12px;border-top:1px dashed var(--line)}
+.dn{display:flex;gap:7px;align-items:baseline}
+.arr{color:var(--c);font-weight:700;font-size:16px}
+.dn b{font-size:13px;letter-spacing:.02em}
+.to{font-size:12px;color:var(--dim);overflow-wrap:anywhere}
+.er{text-align:right}
+.er small{display:block;font-size:11px;color:var(--dim);margin-bottom:3px;min-height:1em;line-height:1}
+.led{display:inline-block;min-width:112px;padding:6px 10px 5px;background:var(--ledbg);border:1px solid #262d36;border-radius:8px;box-shadow:inset 0 0 14px rgba(255,180,58,.06)}
+.eta{display:block;font-size:30px;line-height:1.1;font-weight:700;letter-spacing:-.02em;color:var(--led);text-shadow:0 0 10px rgba(255,180,58,.4);font-variant-numeric:tabular-nums}
+.eta.now{color:#ff7a45;text-shadow:0 0 10px rgba(255,122,69,.5);animation:pulse 1s ease-in-out infinite;font-size:24px}
+.eta.soon{color:#ff9a45}
+@keyframes pulse{50%{opacity:.4}}
+.pb{grid-column:1/-1;height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin:10px 0 6px}
+.pb i{display:block;height:100%;background:var(--c)}
+.sub{grid-column:1/-1;font-size:12px;color:var(--dim)}
+.dir.term{display:block}
+.dir.term .sub{margin-top:2px}
+.closed{margin:12px 0;padding:12px;border:1px dashed var(--warn);border-radius:4px;color:var(--warn)}
+.closed .sub{color:var(--dim);margin-top:2px}
+.note{margin-top:8px;font-size:11px;color:var(--dim)}
+.note.warn{color:var(--warn)}
+.xtra{margin-top:8px}
+
+.hl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px}
+.hl dt{color:var(--acc);font-weight:700}
+.hl dd{margin:0;color:var(--dim)}
+.lrow{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:center;margin:8px 0}
+.lrow .sub{grid-column:2}
+
+.chips{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin:6px 0 2px;padding:2px 0}
+.chips::-webkit-scrollbar{display:none}
+.chips[hidden]{display:none}
+.chip{flex:none;min-height:36px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--fg);font-size:13px}
+.chip.fill{border-style:dashed;color:var(--dim)}
+.chip:active{background:var(--panel);border-color:var(--acc)}
+.cl{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+
+/* ---------- dock ---------- */
+.dock{flex:none;background:var(--panel);border-top:1px solid var(--line);padding:0 12px 10px}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);margin:0 -12px;border-bottom:1px solid var(--line)}
+.tabs button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:0 2px;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--dim);font-size:13px}
+.tabs button::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--tc)}
+.tabs button.on{color:var(--fg);font-weight:700;border-bottom-color:var(--tc)}
+#sug:empty{display:none}
+.sg{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px 4px;border:0;border-bottom:1px dashed var(--line);background:transparent;text-align:left;font-size:15px}
+.sg:active{background:var(--bg)}
+.prompt{display:flex;align-items:center;gap:8px;margin-top:2px}
+.prompt .ps{color:var(--acc);font-weight:700;font-size:16px}
+#q{
+  flex:1;min-width:0;height:44px;margin:0;padding:0;border:0;border-radius:0;outline:0;background:transparent;
+  font-family:inherit;font-size:16px;color:var(--fg);caret-color:var(--acc);-webkit-appearance:none;appearance:none;
+}
+#q::placeholder{color:var(--dim);opacity:1}
+.btn{flex:none;width:44px;height:44px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--acc);font-size:18px;font-weight:700;padding:0}
+.btn:active{background:var(--panel);border-color:var(--acc)}
+.btn:focus-visible,.chip:focus-visible,.sg:focus-visible,.tabs button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+@media (max-width:360px){ body{font-size:13px} .eta{font-size:26px} .led{min-width:96px} }
+@media (max-height:700px){ :root.kb .tabs{display:none} }
+
+/* ---------- intro: train arrives, doors open ---------- */
+#intro{
+  position:fixed;left:0;top:0;right:0;bottom:0;z-index:100;display:none;overflow:hidden;
+  background:#05070a;touch-action:manipulation;
+  --cw:min(90vw,620px);--gap:12px;
+}
+#intro.play{display:block;animation:introOut .55s ease 3.85s forwards}
+@keyframes introOut{to{opacity:0;visibility:hidden}}
+#intro .zoom{position:absolute;left:0;top:0;right:0;bottom:0;transform-origin:50% 54%;will-change:transform}
+#intro.play .zoom{animation:zoomIn .95s cubic-bezier(.55,0,.9,.4) 3.3s forwards}
+@keyframes zoomIn{to{transform:scale(7)}}
+#intro .rig{position:absolute;left:0;top:0;right:0;bottom:0}
+#intro.play .rig{animation:jolt .4s ease 2.55s}
+@keyframes jolt{0%,100%{transform:translate(0,0)}25%{transform:translate(3px,2px)}55%{transform:translate(-2px,-1px)}80%{transform:translate(1px,0)}}
+#intro .wall{
+  position:absolute;left:0;top:0;right:0;height:84%;
+  background:
+    repeating-linear-gradient(90deg,rgba(255,225,170,.07) 0 2px,transparent 2px 78px),
+    linear-gradient(180deg,#14161b 0%,#26262b 38%,#3a342c 100%);
+}
+#intro .lamp{position:absolute;top:2%;width:84px;height:84px;margin-left:-42px;border-radius:50%;background:radial-gradient(circle,rgba(255,230,170,.95) 0 8%,rgba(255,200,110,.28) 38%,transparent 70%);opacity:0}
+#intro.play .lamp{animation:lampOn .5s steps(1,end) forwards,flick .22s steps(1,end) 0s 3 alternate}
+#intro .lamp:nth-child(2){left:14%}
+#intro .lamp:nth-child(3){left:38%;animation-delay:.12s}
+#intro .lamp:nth-child(4){left:62%;animation-delay:.24s}
+#intro .lamp:nth-child(5){left:86%;animation-delay:.08s}
+@keyframes lampOn{to{opacity:1}}
+@keyframes flick{50%{opacity:.35}}
+#intro .sign{
+  position:absolute;left:50%;top:12%;transform:translateX(-50%);min-width:60%;max-width:92%;box-sizing:border-box;
+  padding:10px 16px;text-align:center;background:#0d1015;border:1px solid #2b333d;border-radius:8px;color:#e8ecf0;
+  font-size:15px;letter-spacing:.14em;
+}
+#intro .sign b{font-weight:700}
+#intro .sign .msg{display:block;position:relative;height:1.4em;margin-top:4px;font-size:12px;letter-spacing:.06em;color:#ffb43a;text-shadow:0 0 8px rgba(255,180,58,.5)}
+#intro .sign .msg span{position:absolute;left:0;right:0;opacity:0}
+#intro.play .sign .msg span:nth-child(1){animation:msgA 2.7s linear .1s forwards}
+#intro.play .sign .msg span:nth-child(2){animation:msgB .3s linear 2.8s forwards}
+@keyframes msgA{0%{opacity:0}8%,88%{opacity:1}100%{opacity:0}}
+@keyframes msgB{to{opacity:1}}
+#intro .bed{position:absolute;left:0;right:0;top:80%;height:6%;background:linear-gradient(180deg,#0a0b0e,#14161a)}
+#intro .bed::before,#intro .bed::after{content:"";position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,#4a4f58,#8a919b,#4a4f58)}
+#intro .bed::before{top:40%}
+#intro .bed::after{top:78%}
+#intro .floor{position:absolute;left:0;right:0;top:86%;bottom:0;background:linear-gradient(180deg,#34363c,#1a1b1f)}
+#intro .floor::before{content:"";position:absolute;left:0;right:0;top:9px;height:6px;background:repeating-linear-gradient(90deg,#ffcf3a 0 14px,#c99c00 14px 16px)}
+#intro .floor::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;opacity:0;background:radial-gradient(ellipse at 50% 0,rgba(255,214,130,.6),transparent 62%)}
+#intro.play .floor::after{animation:spill .8s ease 2.9s forwards}
+@keyframes spill{to{opacity:1}}
+#intro .train{
+  position:absolute;left:0;top:26%;height:56%;width:calc(3 * var(--cw) + 2 * var(--gap));
+  display:flex;gap:var(--gap);will-change:transform;
+  transform:translateX(calc(-3 * var(--cw) - 2 * var(--gap) - 40px));
+}
+#intro.play .train{animation:arrive 2.3s cubic-bezier(.08,.8,.16,1) .35s forwards}
+@keyframes arrive{to{transform:translateX(calc((100vw - var(--cw)) / 2 - var(--cw) - var(--gap)))}}
+#intro .car{
+  position:relative;flex:none;width:var(--cw);height:100%;overflow:hidden;
+  border-radius:22px 22px 6px 6px;
+  background:linear-gradient(180deg,#dfe4ea 0%,#bcc4ce 36%,#929ca9 70%,#626c78 100%);
+  box-shadow:0 0 44px rgba(0,0,0,.7),inset 0 2px 0 rgba(255,255,255,.55);
+}
+#intro .car::before{content:"";position:absolute;left:0;right:0;top:68%;height:6%;background:#ef161e}
+#intro .car::after{content:"";position:absolute;left:0;right:0;bottom:0;height:11%;background:linear-gradient(180deg,#2b3037,#121418)}
+#intro .win{
+  position:absolute;top:12%;height:34%;width:15%;border-radius:10px;
+  background:
+    radial-gradient(circle at 32% 64%,#3a2a12 0 9%,transparent 10%),
+    radial-gradient(ellipse at 32% 112%,#3a2a12 0 26%,transparent 27%),
+    linear-gradient(180deg,#ffe9b8,#f5c76a 62%,#d9a24a);
+  box-shadow:inset 0 0 0 4px #1a1d22;
+}
+#intro .win.b{background:linear-gradient(180deg,#ffe9b8,#f5c76a 62%,#d9a24a)}
+#intro .win.w1{left:4%}
+#intro .win.w2{left:21%}
+#intro .win.w3{left:64%}
+#intro .win.w4{left:81%}
+#intro .door{
+  position:absolute;left:39%;width:22%;top:10%;bottom:10%;overflow:hidden;border-radius:8px 8px 3px 3px;
+  background:linear-gradient(180deg,#fff3cf,#ffd88a 55%,#e8b45a);box-shadow:inset 0 0 0 4px #1a1d22;
+}
+#intro .door::after{content:"";position:absolute;left:0;right:0;bottom:0;height:24%;background:linear-gradient(180deg,#80332a,#4a1812)}
+#intro .pole{position:absolute;left:50%;top:0;bottom:0;width:6px;margin-left:-3px;background:linear-gradient(90deg,#7e8792,#e9edf2,#7e8792);z-index:1}
+#intro .leaf{position:absolute;top:0;bottom:0;width:50%;z-index:2;background:linear-gradient(180deg,#cdd4dd,#9aa4b1);box-shadow:inset 0 0 0 4px #1a1d22}
+#intro .leaf::before{content:"";position:absolute;left:16%;right:16%;top:7%;height:52%;border-radius:6px;background:linear-gradient(180deg,#ffeec2,#f7cf7a);box-shadow:inset 0 0 0 3px rgba(26,29,34,.65)}
+#intro .leaf.l{left:0}
+#intro .leaf.r{right:0}
+#intro.play .leaf.l{animation:openL .9s cubic-bezier(.5,0,.2,1) 2.85s forwards}
+#intro.play .leaf.r{animation:openR .9s cubic-bezier(.5,0,.2,1) 2.85s forwards}
+@keyframes openL{to{transform:translateX(-102%)}}
+@keyframes openR{to{transform:translateX(102%)}}
+#intro .cap{position:absolute;left:0;right:0;bottom:calc(3% + env(safe-area-inset-bottom,0px));text-align:center;font-size:13px;letter-spacing:.05em;color:#ffd88a;opacity:0}
+#intro.play .cap{animation:capIn .4s ease 2.7s forwards}
+@keyframes capIn{to{opacity:1}}
+#skip{
+  position:absolute;right:14px;top:calc(env(safe-area-inset-top,0px) + 12px);z-index:3;padding:8px 12px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);border-radius:999px;color:#cdd3da;font-size:12px;
+}
+
+@media (prefers-reduced-motion:reduce){
+  .boot div{animation:none !important;opacity:1}
+  .lv::before,.eta.now{animation:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="bar">
+    <span><b id="ps1">metro</b>@msk <span class="dim">~/eta</span></span>
+    <span class="r"><span id="mode"></span><span id="clock">--:--:--</span></span>
+  </div>
+  <div id="log" aria-live="polite"></div>
+  <div class="dock">
+    <div class="tabs" id="tabs" role="tablist">
+      <button type="button" data-tab="metro" class="on" style="--tc:#ef161e">метро</button>
+      <button type="button" data-tab="mcd" style="--tc:#f7a600">мцд</button>
+      <button type="button" data-tab="tram" style="--tc:#ff5a36">трамвай</button>
+      <button type="button" data-tab="bus" style="--tc:#2d7ff9">автобус</button>
+    </div>
+    <div id="sug"></div>
+    <div id="chips" class="chips"></div>
+    <form id="form" class="prompt" autocomplete="off">
+      <span class="ps">❯</span>
+      <input id="q" type="text" inputmode="text" enterkeyhint="go" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" placeholder="станция метро…" aria-label="запрос">
+      <button type="button" class="btn" id="tab" aria-label="подставить подсказку">⇥</button>
+      <button type="submit" class="btn" aria-label="показать">↵</button>
+    </form>
+  </div>
+</div>
+
+<div id="intro" class="play" aria-hidden="true">
+  <div class="zoom">
+    <div class="rig">
+      <div class="wall"></div>
+      <div class="lamp"></div><div class="lamp"></div><div class="lamp"></div><div class="lamp"></div><div class="lamp"></div>
+      <div class="sign">
+        <b>МЕТРО&nbsp;//&nbsp;ETA</b>
+        <span class="msg"><span>поезд прибывает на платформу</span><span>двери открываются</span></span>
+      </div>
+      <div class="bed"></div>
+      <div class="train">
+        <div class="car"><i class="win w1"></i><i class="win w2 b"></i><div class="door"><i class="pole"></i><i class="leaf l"></i><i class="leaf r"></i></div><i class="win w3"></i><i class="win w4 b"></i></div>
+        <div class="car"><i class="win w1"></i><i class="win w2 b"></i><div class="door"><i class="pole"></i><i class="leaf l"></i><i class="leaf r"></i></div><i class="win w3"></i><i class="win w4 b"></i></div>
+        <div class="car"><i class="win w1"></i><i class="win w2 b"></i><div class="door"><i class="pole"></i><i class="leaf l"></i><i class="leaf r"></i></div><i class="win w3"></i><i class="win w4 b"></i></div>
+      </div>
+      <div class="floor"></div>
+    </div>
+  </div>
+  <div class="cap">осторожно, двери открываются</div>
+  <button type="button" id="skip">пропустить</button>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var $ = function(id){ return document.getElementById(id); };
+var esc = function(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
+
+var store = {
+  get: function(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+  set: function(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+};
+var sess = {
+  get: function(k){ try { return sessionStorage.getItem(k); } catch(e){ return null; } },
+  set: function(k,v){ try { sessionStorage.setItem(k,v); } catch(e){} }
+};
+
+/* ---------- data ---------- */
+/* станции перечислены от конца "a" к концу "b" */
+var LINES = {
+  '1':{n:'Сокольническая',c:'#ef161e',t:'#fff',base:105,
+     a:{arr:'↗',tag:'СЕВЕРО-ВОСТОК',to:'Бульвар Рокоссовского'}, b:{arr:'↙',tag:'ЮГО-ЗАПАД',to:'Коммунарка'},
+     s:'Бульвар Рокоссовского,Черкизовская,Преображенская площадь,Сокольники,Красносельская,Комсомольская,Красные ворота,Чистые пруды,Лубянка,Охотный ряд,Библиотека имени Ленина,Кропоткинская,Парк культуры,Фрунзенская,Спортивная,Воробьёвы горы,Университет,Проспект Вернадского,Юго-Западная,Тропарёво,Румянцево,Саларьево,Филатов Луг,Прокшино,Ольховая,Коммунарка'},
+  '2':{n:'Замоскворецкая',c:'#2dbe2c',t:'#fff',base:100,
+     a:{arr:'↑',tag:'СЕВЕР',to:'Ховрино'}, b:{arr:'↓',tag:'ЮГ',to:'Алма-Атинская'},
+     s:'Ховрино,Беломорская,Речной вокзал,Водный стадион,Войковская,Сокол,Аэропорт,Динамо,Белорусская,Маяковская,Тверская,Театральная,Новокузнецкая,Павелецкая,Автозаводская,Технопарк,Коломенская,Каширская,Кантемировская,Царицыно,Орехово,Домодедовская,Красногвардейская,Алма-Атинская'},
+  '3':{n:'Арбатско-Покровская',c:'#0078be',t:'#fff',base:100,
+     a:{arr:'↖',tag:'СЕВЕРО-ЗАПАД',to:'Пятницкое шоссе'}, b:{arr:'→',tag:'ВОСТОК',to:'Щёлковская'},
+     s:'Пятницкое шоссе,Митино,Волоколамская,Мякинино,Строгино,Крылатское,Молодёжная,Кунцевская,Славянский бульвар,Парк Победы,Киевская,Смоленская,Арбатская,Площадь Революции,Курская,Бауманская,Электрозаводская,Семёновская,Партизанская,Измайловская,Первомайская,Щёлковская'},
+  '4':{n:'Филёвская',c:'#00bfff',t:'#000',base:150,
+     a:{arr:'→',tag:'ВОСТОК',to:'Александровский сад'}, b:{arr:'←',tag:'ЗАПАД',to:'Кунцевская'},
+     s:'Александровский сад,Арбатская,Смоленская,Киевская,Студенческая,Кутузовская,Фили,Багратионовская,Филёвский парк,Пионерская,Кунцевская'},
+  '5':{n:'Кольцевая',c:'#8d5b2d',t:'#fff',base:120,ring:true,
+     a:{arr:'↻',tag:'ПО ЧАСОВОЙ',to:'по кольцу'}, b:{arr:'↺',tag:'ПРОТИВ ЧАСОВОЙ',to:'по кольцу'},
+     s:'Киевская,Краснопресненская,Белорусская,Новослободская,Проспект Мира,Комсомольская,Курская,Таганская,Павелецкая,Добрынинская,Октябрьская,Парк культуры'},
+  '6':{n:'Калужско-Рижская',c:'#ed9121',t:'#000',base:105,
+     a:{arr:'↑',tag:'СЕВЕР',to:'Медведково'}, b:{arr:'↓',tag:'ЮГ',to:'Новоясеневская'},
+     s:'Медведково,Бабушкинская,Свиблово,Ботанический сад,ВДНХ,Алексеевская,Рижская,Проспект Мира,Сухаревская,Тургеневская,Китай-город,Третьяковская,Октябрьская,Шаболовская,Ленинский проспект,Академическая,Профсоюзная,Новые Черёмушки,Калужская,Беляево,Коньково,Тёплый Стан,Ясенево,Новоясеневская'},
+  '7':{n:'Таганско-Краснопресненская',c:'#800080',t:'#fff',base:100,
+     a:{arr:'↖',tag:'СЕВЕРО-ЗАПАД',to:'Планерная'}, b:{arr:'↘',tag:'ЮГО-ВОСТОК',to:'Котельники'},
+     s:'Планерная,Сходненская,Тушинская,Спартак,Щукинская,Октябрьское поле,Полежаевская,Беговая,Улица 1905 года,Баррикадная,Пушкинская,Кузнецкий мост,Китай-город,Таганская,Пролетарская,Волгоградский проспект,Текстильщики,Кузьминки,Рязанский проспект,Выхино,Лермонтовский проспект,Жулебино,Котельники'},
+  '8':{n:'Калининская',c:'#ffd702',t:'#000',base:190,
+     a:{arr:'←',tag:'ЗАПАД',to:'Третьяковская'}, b:{arr:'→',tag:'ВОСТОК',to:'Новокосино'},
+     s:'Третьяковская,Марксистская,Площадь Ильича,Авиамоторная,Шоссе Энтузиастов,Перово,Новогиреево,Новокосино'},
+  '9':{n:'Серпуховско-Тимирязевская',c:'#adacac',t:'#000',base:105,
+     a:{arr:'↑',tag:'СЕВЕР',to:'Алтуфьево'}, b:{arr:'↓',tag:'ЮГ',to:'Бульвар Дмитрия Донского'},
+     s:'Алтуфьево,Бибирево,Отрадное,Владыкино,Петровско-Разумовская,Тимирязевская,Дмитровская,Савёловская,Менделеевская,Цветной бульвар,Чеховская,Боровицкая,Полянка,Серпуховская,Тульская,Нагатинская,Нагорная,Нахимовский проспект,Севастопольская,Чертановская,Южная,Пражская,Улица Академика Янгеля,Аннино,Бульвар Дмитрия Донского'},
+  '10':{n:'Люблинско-Дмитровская',c:'#bed12c',t:'#000',base:130,
+     a:{arr:'↑',tag:'СЕВЕР',to:'Физтех'}, b:{arr:'↓',tag:'ЮГ',to:'Зябликово'},
+     s:'Физтех,Лианозово,Яхромская,Селигерская,Верхние Лихоборы,Окружная,Петровско-Разумовская,Фонвизинская,Бутырская,Марьина роща,Достоевская,Трубная,Сретенский бульвар,Чкаловская,Римская,Крестьянская застава,Дубровка,Кожуховская,Печатники,Волжская,Люблино,Братиславская,Марьино,Борисово,Шипиловская,Зябликово'},
+
+  /* МЦД: в списках только станции, в которых я уверен; конечные проверены */
+  'D1':{n:'Белорусско-Савёловский',c:'#f7a600',t:'#000',base:360,
+     a:{arr:'↑',tag:'СЕВЕР',to:'Лобня'}, b:{arr:'←',tag:'ЗАПАД',to:'Одинцово'},
+     s:'Лобня,Новодачная,Марк,Лианозово,Окружная,Тимирязевская,Савёловский вокзал,Белорусский вокзал,Беговая,Тестовская,Фили,Славянский бульвар,Кунцевская,Сетунь,Немчиновка,Баковка,Одинцово'},
+  'D2':{n:'Курско-Рижский',c:'#e6389a',t:'#fff',base:360,
+     a:{arr:'↖',tag:'СЕВЕРО-ЗАПАД',to:'Нахабино'}, b:{arr:'↓',tag:'ЮГ',to:'Подольск'},
+     s:'Нахабино,Опалиха,Красногорская,Павшино,Пенягино,Волоколамская,Тушинская,Щукинская,Стрешнево,Дмитровская,Марьина Роща,Рижская,Площадь трёх вокзалов,Курская,Москва-Товарная,Новохохловская,Текстильщики,Печатники,Царицыно,Остафьево,Щербинка,Силикатная,Подольск'},
+  'D3':{n:'Ленинградско-Казанский',c:'#f26b21',t:'#000',base:330,
+     a:{arr:'↖',tag:'СЕВЕРО-ЗАПАД',to:'Зеленоград-Крюково'}, b:{arr:'↘',tag:'ЮГО-ВОСТОК',to:'Ипподром (Раменское)'},
+     s:'Зеленоград-Крюково,Химки,Левобережная,Ховрино,Лихоборы,Петровско-Разумовская,Останкино,Электрозаводская,Авиамоторная,Андроновка,Перово,Вешняки,Выхино,Косино,Ухтомская,Люберцы,Панки,Ипподром'},
+  'D4':{n:'Калужско-Нижегородский',c:'#3aa843',t:'#fff',base:330,
+     a:{arr:'↙',tag:'ЮГО-ЗАПАД',to:'Апрелевка'}, b:{arr:'→',tag:'ВОСТОК',to:'Железнодорожная'},
+     s:'Апрелевка,Лесной городок,Внуково,Аминьевская,Минская,Поклонная,Кутузовская,Тестовская,Беговая,Белорусская,Савёловская,Марьина Роща,Рижская,Площадь трёх вокзалов,Курская,Серп и Молот,Нижегородская,Чухлинка,Новогиреево,Реутов,Никольское,Железнодорожная'}
+};
+
+function norm(s){
+  return String(s).toLowerCase().replace(/ё/g,'е').replace(/[-–—_.,]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+var STN = {metro:{},mcd:{}}, LIST = {metro:[],mcd:[]}, KEY = {metro:{},mcd:{}};
+Object.keys(LINES).forEach(function(id){
+  var L = LINES[id];
+  L.kind = id.charAt(0) === 'D' ? 'mcd' : 'metro';
+  L.list = L.s.split(',').map(function(x){ return x.trim(); });
+  L.list.forEach(function(nm,i){
+    var M = STN[L.kind];
+    if(!M[nm]){
+      M[nm] = {name:nm,key:norm(nm),mode:L.kind,lines:[]};
+      LIST[L.kind].push(M[nm]);
+      KEY[L.kind][M[nm].key] = M[nm];
+    }
+    M[nm].lines.push({id:id,i:i});
+  });
+});
+
+var MODES = {
+  metro:{ps:'metro',ph:'станция метро…',st:true,color:'#ef161e'},
+  mcd:{ps:'mcd',ph:'станция мцд…',st:true,color:'#f7a600'},
+  tram:{ps:'tram',ph:'трамвай: номер и остановка',st:false,color:'#ff5a36',word:'трамвай'},
+  bus:{ps:'bus',ph:'автобус: номер и остановка',st:false,color:'#2d7ff9',word:'автобус'}
+};
+var POP = {
+  metro:['Комсомольская','Охотный ряд','Китай-город','Белорусская','Курская','Таганская','Тверская','Парк культуры'],
+  mcd:['Белорусская','Курская','Площадь трёх вокзалов','Окружная','Лианозово','Тушинская','Одинцово','Подольск'],
+  tram:['39 Сокольники','17 Бауманская','А Чистые пруды'],
+  bus:['154 Сокол','7 Тверская','н1 Курская']
+};
+
+/* ---------- time model ---------- */
+function msk(ms){
+  var d = new Date(ms + 3*3600*1000);
+  var h = d.getUTCHours(), m = d.getUTCMinutes(), s = d.getUTCSeconds();
+  return {h:h,m:m,s:s,dow:d.getUTCDay(),hf:h + m/60 + s/3600};
+}
+
+function profile(t,kind,route){
+  var hf = t.hf, dow = t.dow;
+  if(hf < 1) dow = (dow + 6) % 7;
+  var wk = dow >= 1 && dow <= 5;
+  var m, l;
+
+  if(kind === 'metro'){
+    if(hf >= 1 && hf < 5.5) return {closed:true,label:'метро закрыто',msg:'метро закрыто (работает с 05:30 до 01:00)',until:(5.5 - hf)*3600,what:'первые поезда'};
+    if(hf < 1 || hf >= 23){ m = 3.3; l = 'поздний вечер'; }
+    else if(wk){
+      if(hf < 6.5){ m = 3.2; l = 'раннее утро'; }
+      else if(hf < 7){ m = 1.8; l = 'утро'; }
+      else if(hf < 10){ m = 1; l = 'час пик'; }
+      else if(hf < 16){ m = 1.6; l = 'день'; }
+      else if(hf < 20){ m = 1; l = 'час пик'; }
+      else { m = 1.9; l = 'вечер'; }
+    } else {
+      if(hf < 7){ m = 3.5; l = 'раннее утро'; }
+      else if(hf < 10){ m = 2; l = 'утро'; }
+      else if(hf < 20){ m = 1.5; l = 'выходной день'; }
+      else { m = 1.9; l = 'вечер'; }
+    }
+    return {closed:false,mult:m,label:l,last:(hf >= 0.5 && hf < 1)};
+  }
+
+  if(kind === 'mcd'){
+    if(hf >= 1 && hf < 5.5) return {closed:true,label:'мцд не ходят',msg:'мцд не ходят (работают примерно с 05:30 до 01:00)',until:(5.5 - hf)*3600,what:'первые поезда'};
+    if(hf < 1 || hf >= 22){ m = 3.2; l = 'поздний вечер'; }
+    else if(wk){
+      if(hf < 6.5){ m = 2.2; l = 'раннее утро'; }
+      else if(hf < 7){ m = 1.4; l = 'утро'; }
+      else if(hf < 10){ m = 1; l = 'час пик'; }
+      else if(hf < 16){ m = 1.8; l = 'день'; }
+      else if(hf < 20){ m = 1; l = 'час пик'; }
+      else { m = 2; l = 'вечер'; }
+    } else {
+      if(hf < 7){ m = 3; l = 'раннее утро'; }
+      else { m = 2; l = 'выходной день'; }
+    }
+    return {closed:false,mult:m,label:l,last:(hf >= 0.5 && hf < 1)};
+  }
+
+  /* трамваи и автобусы */
+  var night = route && /^[нНnN]\d/.test(route);
+  if(night){
+    if(hf >= 0.5 && hf < 5.5) return {closed:false,mult:1,label:'ночной маршрут'};
+    return {closed:true,label:'ночной маршрут',msg:'ночной маршрут ходит примерно с 00:30 до 05:30',until:(hf >= 5.5 ? (24.5 - hf) : (0.5 - hf))*3600,what:'выход на линию'};
+  }
+  if(hf >= 1 && hf < 5) return {closed:true,label:'ночью не ходит',msg:'обычные маршруты ночью не ходят (примерно с 01:00 до 05:00)',until:(5 - hf)*3600,what:'первые рейсы'};
+  if(hf < 1 || hf >= 23){ m = 2.4; l = 'поздний вечер'; }
+  else if(wk){
+    if(hf < 6){ m = 2; l = 'раннее утро'; }
+    else if(hf < 7){ m = 1.3; l = 'утро'; }
+    else if(hf < 10){ m = 1; l = 'час пик'; }
+    else if(hf < 16){ m = 1.4; l = 'день'; }
+    else if(hf < 20){ m = 1; l = 'час пик'; }
+    else { m = 1.6; l = 'вечер'; }
+  } else {
+    if(hf < 7){ m = 2.2; l = 'раннее утро'; }
+    else if(hf < 22){ m = 1.5; l = 'выходной день'; }
+    else { m = 2.2; l = 'вечер'; }
+  }
+  return {closed:false,mult:m,label:l};
+}
+
+function h32(s){
+  var h = 2166136261;
+  for(var i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h,16777619); }
+  return h >>> 0;
+}
+function mmss(sec){
+  var s = Math.max(0,Math.round(sec)), m = Math.floor(s/60), r = s % 60;
+  if(m >= 60) return Math.floor(m/60) + ':' + pad(m % 60) + ':' + pad(r);
+  return pad(m) + ':' + pad(r);
+}
+function hm(sec){
+  var m = Math.max(1,Math.ceil(sec/60)), h = Math.floor(m/60), r = m % 60;
+  return h ? (h + ' ч ' + r + ' мин') : (r + ' мин');
+}
+
+/* ---------- search ---------- */
+function lev(a,b){
+  var m = a.length, n = b.length, i, j, prev, cur;
+  if(!m) return n; if(!n) return m;
+  prev = []; for(j=0;j<=n;j++) prev[j] = j;
+  for(i=1;i<=m;i++){
+    cur = [i];
+    for(j=1;j<=n;j++){
+      cur[j] = Math.min(prev[j]+1, cur[j-1]+1, prev[j-1] + (a.charAt(i-1)===b.charAt(j-1) ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+function find(q,mode){
+  var n = norm(q), out = [];
+  if(!n) return out;
+  LIST[mode].forEach(function(st){
+    var k = st.key, sc = -1;
+    if(k === n) sc = 0;
+    else if(k.indexOf(n) === 0) sc = 1;
+    else if(k.split(' ').some(function(w){ return w.indexOf(n) === 0; })) sc = 2;
+    else if(k.indexOf(n) !== -1) sc = 3;
+    else if(n.length >= 3){
+      var d = Math.min(lev(n,k), lev(n,k.slice(0,n.length)));
+      if(d <= Math.max(1,Math.floor(n.length/3))) sc = 4 + d;
+    }
+    if(sc >= 0) out.push({st:st,sc:sc});
+  });
+  out.sort(function(a,b){ return a.sc - b.sc || a.st.name.localeCompare(b.st.name,'ru'); });
+  return out;
+}
+function otherOf(st){
+  var o = st.mode === 'metro' ? 'mcd' : 'metro';
+  return KEY[o][st.key] || null;
+}
+
+/* ---------- rendering ---------- */
+function badges(st){
+  return '<span class="bd">' + st.lines.map(function(l){
+    var L = LINES[l.id];
+    return '<span class="lb" style="background:' + L.c + ';color:' + L.t + '">' + l.id + '</span>';
+  }).join('') + '</span>';
+}
+function stripe(colors){
+  if(colors.length === 1) return colors[0];
+  var n = colors.length;
+  return 'linear-gradient(180deg,' + colors.map(function(c,i){
+    return c + ' ' + (i*100/n) + '% ' + ((i+1)*100/n) + '%';
+  }).join(',') + ')';
+}
+
+function dirRow(L,dk,H,nowSec,seed,idx){
+  var D = L[dk];
+  var term = L.list && !L.ring && ((dk === 'a' && idx === 0) || (dk === 'b' && idx === L.list.length - 1));
+  if(term){
+    return '<div class="dir term"><div class="dn"><span class="arr">' + D.arr + '</span><b>' + D.tag + '</b></div>' +
+           '<div class="sub">конечная — в эту сторону поезда отсюда не идут</div></div>';
+  }
+  var phase = h32(seed + '|' + dk) % H;
+  var next = Math.ceil((nowSec - phase) / H) * H + phase;
+  var rem = Math.max(0, next - nowSec);
+  var pct = Math.max(0, Math.min(100, (1 - rem / H) * 100)).toFixed(1);
+  var sp = Math.min(30, Math.round(H * 0.15));
+  var cls = rem <= 8 ? 'now' : (rem <= 30 ? 'soon' : '');
+  var txt = rem <= 8 ? 'сейчас' : mmss(rem);
+  return '<div class="dir" style="--c:' + L.c + '">' +
+    '<div><div class="dn"><span class="arr">' + D.arr + '</span><b>' + D.tag + '</b></div>' + (D.to ? '<div class="to">→ ' + esc(D.to) + '</div>' : '') + '</div>' +
+    '<div class="er"><small>' + (rem <= 8 ? '' : 'через') + '</small><span class="led"><span class="eta ' + cls + '">' + txt + '</span></span></div>' +
+    '<div class="pb"><i style="width:' + pct + '%"></i></div>' +
+    '<div class="sub">дальше: ' + mmss(rem + H) + ' · ' + mmss(rem + 2*H) + ' · разброс ±' + sp + ' с</div>' +
+    '</div>';
+}
+
+function closedBlock(p){
+  return '<div class="closed">◼ ' + esc(p.msg) + '<div class="sub">' + p.what + ' ≈ через ' + hm(p.until) + '</div></div>';
+}
+
+function renderStation(st,now){
+  var t = msk(now), p = profile(t,st.mode), nowSec = now / 1000;
+  var cols = st.lines.map(function(l){ return LINES[l.id].c; });
+  var h = '<div class="sh" style="--st:' + stripe(cols) + '"><span class="sn">' + esc(st.name) + '</span>' + badges(st) + '</div>';
+  if(p.closed){ return h + closedBlock(p); }
+  st.lines.forEach(function(l){
+    var L = LINES[l.id];
+    var H = Math.max(80, Math.round(L.base * p.mult));
+    h += '<div class="ln" style="--c:' + L.c + '"><div class="lh">' +
+         '<span class="lb" style="background:' + L.c + ';color:' + L.t + '">' + l.id + '</span>' +
+         '<span class="ln-n">' + L.n + '</span>' +
+         '<span class="hw">интервал ≈ ' + mmss(H) + ' · ' + p.label + '</span></div>' +
+         dirRow(L,'a',H,nowSec,st.name + '|' + l.id,l.i) + dirRow(L,'b',H,nowSec,st.name + '|' + l.id,l.i) + '</div>';
+  });
+  if(p.last) h += '<div class="note warn"># последние поезда уходят около 01:00</div>';
+  h += '<div class="note"># оценка по типичным интервалам, а не данные с табло</div>';
+  return h;
+}
+
+function renderSurface(q,now){
+  var t = msk(now), p = profile(t,q.kind,q.route), nowSec = now / 1000;
+  var col = MODES[q.kind].color;
+  var h = '<div class="sh" style="--st:' + col + '"><span class="sn">' + esc(q.stop) + '</span>' +
+    '<span class="lb" style="background:' + col + ';color:#fff">' + (q.route ? esc(q.route) : 'любой') + '</span></div>';
+  if(p.closed){ return h + closedBlock(p); }
+  var seed = q.kind + '|' + q.route + '|' + norm(q.stop);
+  var rh = h32(q.kind + '|' + q.route);
+  var base;
+  if(!q.route) base = 150;
+  else if(/^[нНnN]\d/.test(q.route)) base = 1500 + (rh % 3) * 300;
+  else base = q.kind === 'bus' ? 300 + (rh % 4) * 60 : 330 + (rh % 5) * 60;
+  var H = Math.max(90, Math.round(base * p.mult));
+  var L = {n:seed,c:col,a:{arr:'→',tag:'ПРЯМОЕ',to:''},b:{arr:'←',tag:'ОБРАТНОЕ',to:''}};
+  h += '<div class="ln" style="--c:' + col + '"><div class="lh">' +
+       '<span class="ln-n">' + MODES[q.kind].word + (q.route ? ' ' + esc(q.route) : ': любой маршрут') + '</span>' +
+       '<span class="hw">интервал ≈ ' + mmss(H) + ' · ' + p.label + '</span></div>' +
+       dirRow(L,'a',H,nowSec,seed,null) + dirRow(L,'b',H,nowSec,seed,null) + '</div>';
+  if(!q.route) h += '<div class="note warn"># номер не указан — это суммарная оценка по всем маршрутам. добавь номер: «154 ' + esc(q.stop) + '»</div>';
+  h += '<div class="note"># табло для наземного транспорта открыто не всем: считаю по типичному интервалу маршрута, номер и остановку не проверяю. сторону смотри по указателю на остановке</div>';
+  return h;
+}
+
+/* ---------- log ---------- */
+var log = $('log'), inp = $('q'), sug = $('sug'), chips = $('chips');
+var live = null, mode = 'metro';
+
+function scrollDown(){ requestAnimationFrame(function(){ log.scrollTop = log.scrollHeight; }); }
+
+function addBlock(cmdHtml,bodyHtml,tailHtml){
+  var el = document.createElement('div');
+  el.className = 'blk';
+  el.innerHTML = '<div class="cmd"><span class="ps">❯</span><span>' + cmdHtml + '</span></div><div class="out">' + bodyHtml + '</div>' +
+    (tailHtml ? '<div class="xtra">' + tailHtml + '</div>' : '');
+  log.appendChild(el);
+  while(log.children.length > 14) log.removeChild(log.firstChild);
+  scrollDown();
+  return el;
+}
+function freezeLive(){
+  if(!live) return;
+  live.el.classList.add('frozen');
+  var lv = live.el.querySelector('.lv'); if(lv) lv.remove();
+  live = null;
+}
+function chipBtn(label,attrs){
+  return '<button type="button" class="chip" ' + attrs + '>' + esc(label) + '</button>';
+}
+function stChips(names,m){
+  return '<div class="cl">' + names.map(function(n){
+    return chipBtn(n,'data-st="' + esc(n) + '" data-mode="' + m + '"');
+  }).join('') + '</div>';
+}
+
+function showStation(st){
+  freezeLive();
+  var o = otherOf(st), tail = '';
+  if(o) tail = '<button type="button" class="chip" data-st="' + esc(o.name) + '" data-mode="' + o.mode + '">есть и ' + (o.mode === 'mcd' ? 'мцд' : 'метро') + ' ›</button>';
+  var el = addBlock('eta <span class="q">"' + esc(st.name) + '"</span> <span class="lv">live</span>', renderStation(st,Date.now()), tail);
+  live = {el:el,fn:function(now){ return renderStation(st,now); }};
+  remember(st.mode,st.name);
+}
+function showSurface(q,raw){
+  freezeLive();
+  var label = (q.route ? q.route + ' ' : '') + q.stop;
+  var el = addBlock(q.kind + ' <span class="q">"' + esc(label) + '"</span> <span class="lv">live</span>', renderSurface(q,Date.now()));
+  live = {el:el,fn:function(now){ return renderSurface(q,now); }};
+  remember(q.kind,label);
+}
+
+/* recent + chips */
+function recents(m){
+  try {
+    var r = JSON.parse(store.get('mm_r_' + m) || '[]');
+    return MODES[m].st ? r.filter(function(n){ return STN[m][n]; }) : r;
+  } catch(e){ return []; }
+}
+function remember(m,val){
+  var r = recents(m).filter(function(x){ return x !== val; });
+  r.unshift(val);
+  store.set('mm_r_' + m, JSON.stringify(r.slice(0,6)));
+  if(m === mode) renderChips();
+}
+function renderChips(){
+  var r = recents(mode), html = '';
+  if(MODES[mode].st){
+    var all = r.slice();
+    POP[mode].forEach(function(n){ if(all.indexOf(n) === -1) all.push(n); });
+    html = all.slice(0,10).map(function(n){ return chipBtn(n,'data-st="' + esc(n) + '" data-mode="' + mode + '"'); }).join('');
+  } else {
+    html = r.map(function(n){ return chipBtn(n,'data-q="' + esc(n) + '" data-mode="' + mode + '"'); }).join('');
+    html += POP[mode].filter(function(n){ return r.indexOf(n) === -1; }).map(function(n){
+      return '<button type="button" class="chip fill" data-fill="' + esc(n) + '">' + esc(n) + '</button>';
+    }).join('');
+  }
+  chips.innerHTML = html;
+}
+
+function setMode(m){
+  if(!MODES[m] || m === mode) return;
+  mode = m;
+  store.set('mm_mode',m);
+  var btns = document.querySelectorAll('#tabs button');
+  for(var i=0;i<btns.length;i++) btns[i].classList.toggle('on',btns[i].getAttribute('data-tab') === m);
+  $('ps1').textContent = MODES[m].ps;
+  inp.placeholder = MODES[m].ph;
+  sug.innerHTML = '';
+  chips.hidden = !!norm(inp.value);
+  renderChips();
+  onInput();
+}
+
+/* commands */
+function cmdHelp(){
+  return '<dl class="hl">' +
+    '<dt>метро / мцд</dt><dd>название станции (опечатки не страшны)</dd>' +
+    '<dt>трамвай / автобус</dt><dd>номер и остановка: <span class="acc">154 Сокол</span></dd>' +
+    '<dt>lines</dt><dd>линии и направления</dd>' +
+    '<dt>random</dt><dd>случайная станция</dd>' +
+    '<dt>theme</dt><dd>светлая / тёмная тема</dd>' +
+    '<dt>intro</dt><dd>показать заставку ещё раз</dd>' +
+    '<dt>clear</dt><dd>очистить экран</dd></dl>' +
+    '<div class="note"># открытого api с реальным временем нет, поэтому считаю по типичным интервалам для этого часа и дня недели. это оценка, а не табло</div>' +
+    '<div class="note"># на iphone: поделиться → на экран «домой», откроется как приложение</div>';
+}
+function cmdLines(){
+  var ids = Object.keys(LINES).filter(function(id){ return LINES[id].kind === (MODES[mode].st ? mode : 'metro'); });
+  return ids.map(function(id){
+    var L = LINES[id];
+    return '<div class="lrow"><span class="lb" style="background:' + L.c + ';color:' + L.t + '">' + id + '</span><b>' + L.n + '</b>' +
+      '<span class="sub">' + L.a.arr + ' ' + L.a.tag.toLowerCase() + ' → ' + esc(L.a.to) + '<br>' + L.b.arr + ' ' + L.b.tag.toLowerCase() + ' → ' + esc(L.b.to) + '</span></div>';
+  }).join('') + '<div class="note"># где линия идёт не строго север–юг, показываю реальную сторону света' + (mode === 'mcd' ? '. в списках мцд только проверенные станции' : '') + '</div>';
+}
+
+function curTheme(){
+  var a = document.documentElement.getAttribute('data-theme');
+  if(a) return a;
+  return window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function setTheme(m){
+  document.documentElement.setAttribute('data-theme',m);
+  store.set('mm_theme',m);
+  var col = m === 'light' ? '#efece4' : '#0b0d10';
+  var metas = document.querySelectorAll('meta[name=theme-color]');
+  for(var i=0;i<metas.length;i++){ metas[i].removeAttribute('media'); metas[i].setAttribute('content',col); }
+}
+
+/* tram / bus query: "154 Сокол", "А Чистые пруды", "Сокол" */
+function parseSurface(raw){
+  var s = raw.trim().replace(/\s+/g,' ');
+  var parts = s.split(' ');
+  var first = parts[0];
+  var isRoute = /\d/.test(first) && /^([а-яёa-z]{0,2}\d{1,3}[а-яёa-z]?)$/i.test(first);
+  var isLetter = /^[А-ЯЁA-Z]$/.test(first);
+  if(parts.length > 1 && (isRoute || isLetter)){
+    return {route:first.toUpperCase(),stop:s.slice(first.length).trim()};
+  }
+  if(parts.length === 1 && isRoute) return {route:first.toUpperCase(),stop:''};
+  return {route:'',stop:s};
+}
+function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function run(raw){
+  var q = raw.trim();
+  if(!q) return;
+  var n = norm(q);
+  var echoQ = esc(q);
+
+  if(n === 'help' || n === '?' || n === 'помощь'){ freezeLive(); addBlock('help',cmdHelp()); return; }
+  if(n === 'clear' || n === 'cls' || n === 'очистить'){ log.innerHTML = ''; live = null; return; }
+  if(n === 'lines' || n === 'линии'){
+    freezeLive();
+    addBlock('lines',MODES[mode].st ? cmdLines() : '<div class="dim">для трамваев и автобусов линий нет: пиши номер и остановку, например <span class="acc">154 Сокол</span></div>');
+    return;
+  }
+  if(n === 'theme' || n === 'тема'){
+    var nt = curTheme() === 'dark' ? 'light' : 'dark';
+    setTheme(nt);
+    freezeLive(); addBlock('theme','<span class="dim">тема: ' + (nt === 'dark' ? 'тёмная' : 'светлая') + '</span>');
+    return;
+  }
+  if(n === 'intro' || n === 'заставка'){ playIntro(); return; }
+  if(n === 'метро'){ setMode('metro'); return; }
+  if(n === 'мцд' || n === 'mcd'){ setMode('mcd'); return; }
+  if(n === 'трамвай' || n === 'tram'){ setMode('tram'); return; }
+  if(n === 'автобус' || n === 'bus'){ setMode('bus'); return; }
+  if(n === 'random' || n === 'случайная'){
+    if(!MODES[mode].st){ freezeLive(); addBlock('random','<span class="dim">случайная станция — для метро и мцд</span>'); return; }
+    showStation(LIST[mode][Math.floor(Math.random() * LIST[mode].length)]);
+    return;
+  }
+
+  /* трамвай / автобус */
+  if(!MODES[mode].st){
+    var pq = parseSurface(q);
+    if(!pq.stop){
+      freezeLive();
+      addBlock(mode + ' <span class="q">"' + echoQ + '"</span>','<div class="err">нужна остановка</div><div class="dim">пиши так: <span class="acc">' + esc(pq.route) + ' Название остановки</span></div>');
+      return;
+    }
+    showSurface({kind:mode,route:pq.route,stop:cap(pq.stop)},q);
+    return;
+  }
+
+  /* метро / мцд */
+  var res = find(q,mode);
+  var good = res.filter(function(r){ return r.sc <= 3; });
+  var exact = res.length && res[0].sc === 0 ? res[0] : null;
+  if(exact){ showStation(exact.st); return; }
+  if(good.length === 1){ showStation(good[0].st); return; }
+  freezeLive();
+  if(good.length > 1){
+    addBlock('eta <span class="q">"' + echoQ + '"</span>',
+      '<div class="dim">найдено несколько, выбери:</div>' + stChips(good.slice(0,8).map(function(r){ return r.st.name; }),mode));
+    return;
+  }
+  var om = mode === 'metro' ? 'mcd' : 'metro';
+  var elsewhere = find(q,om).filter(function(r){ return r.sc <= 3; });
+  if(elsewhere.length){
+    addBlock('eta <span class="q">"' + echoQ + '"</span>',
+      '<div class="err">тут не найдено</div><div class="dim">зато есть в ' + (om === 'mcd' ? 'мцд' : 'метро') + ':</div>' + stChips(elsewhere.slice(0,6).map(function(r){ return r.st.name; }),om));
+    return;
+  }
+  if(res.length){
+    addBlock('eta <span class="q">"' + echoQ + '"</span>',
+      '<div class="err">станция не найдена</div><div class="dim">может, это:</div>' + stChips(res.slice(0,4).map(function(r){ return r.st.name; }),mode));
+    return;
+  }
+  addBlock('eta <span class="q">"' + echoQ + '"</span>',
+    '<div class="err">станция не найдена</div><div class="dim">проверь название или набери <span class="acc">help</span></div>');
+}
+
+/* ---------- input ---------- */
+function sugLimit(){ return window.innerHeight < 700 ? 3 : 4; }
+function topSug(){
+  if(!MODES[mode].st) return [];
+  return find(inp.value,mode).slice(0,sugLimit());
+}
+function onInput(){
+  var v = inp.value;
+  if(!norm(v)){ sug.innerHTML = ''; chips.hidden = false; return; }
+  chips.hidden = true;
+  var r = topSug();
+  sug.innerHTML = r.map(function(x){
+    return '<button type="button" class="sg" data-st="' + esc(x.st.name) + '" data-mode="' + mode + '"><span>' + esc(x.st.name) + '</span>' + badges(x.st) + '</button>';
+  }).join('');
+}
+function clearInput(){ inp.value = ''; onInput(); }
+
+inp.addEventListener('input',onInput);
+inp.addEventListener('keydown',function(e){
+  if(e.key === 'Tab'){
+    var r = topSug();
+    if(r.length){ e.preventDefault(); inp.value = r[0].st.name; onInput(); }
+  }
+});
+$('tab').addEventListener('click',function(){
+  var r = topSug();
+  if(r.length){ inp.value = r[0].st.name; onInput(); }
+  inp.focus();
+});
+$('form').addEventListener('submit',function(e){
+  e.preventDefault();
+  var v = inp.value;
+  clearInput();
+  run(v);
+});
+document.addEventListener('click',function(e){
+  var b = e.target.closest ? e.target.closest('button') : null;
+  if(!b) return;
+  if(b.hasAttribute('data-tab')){ setMode(b.getAttribute('data-tab')); return; }
+  if(b.hasAttribute('data-fill')){
+    inp.value = b.getAttribute('data-fill');
+    onInput(); inp.focus();
+    return;
+  }
+  if(b.hasAttribute('data-q')){
+    setMode(b.getAttribute('data-mode'));
+    clearInput();
+    run(b.getAttribute('data-q'));
+    return;
+  }
+  if(b.hasAttribute('data-st')){
+    var m = b.getAttribute('data-mode') || mode;
+    var st = STN[m] && STN[m][b.getAttribute('data-st')];
+    setMode(m);
+    clearInput();
+    if(st) showStation(st);
+  }
+});
+
+/* ---------- ios keyboard fit ---------- */
+var vv = window.visualViewport, root = document.documentElement, app = $('app');
+function fit(){
+  if(!vv) return;
+  var kb = (window.innerHeight - vv.height) > 120;
+  root.classList.toggle('kb',kb);
+  if(kb){
+    var pt = parseFloat(getComputedStyle(root).paddingTop) || 0;
+    app.style.height = (vv.height - pt) + 'px';
+    app.style.transform = 'translateY(' + vv.offsetTop + 'px)';
+  } else {
+    app.style.height = '';
+    app.style.transform = '';
+  }
+  scrollDown();
+}
+if(vv){ vv.addEventListener('resize',fit); vv.addEventListener('scroll',fit); }
+inp.addEventListener('focus',function(){ setTimeout(fit,250); });
+inp.addEventListener('blur',function(){ setTimeout(fit,150); });
+
+/* ---------- clock / live tick ---------- */
+var clockEl = $('clock'), modeEl = $('mode');
+function tick(){
+  var now = Date.now(), t = msk(now), p = profile(t,mode === 'metro' || mode === 'mcd' ? mode : mode,'');
+  clockEl.textContent = pad(t.h) + ':' + pad(t.m) + ':' + pad(t.s);
+  modeEl.textContent = 'msk · ' + p.label;
+  if(live){
+    var out = live.el.querySelector('.out');
+    if(out) out.innerHTML = live.fn(now);
+  }
+}
+function loop(){ tick(); setTimeout(loop, 1000 - (Date.now() % 1000) + 5); }
+document.addEventListener('visibilitychange',function(){ if(!document.hidden) tick(); });
+
+/* ---------- intro: поезд подъезжает, двери открываются ---------- */
+var intro = $('intro'), introTimer = null, bootEl = null;
+function startBoot(){ if(bootEl) bootEl.classList.add('go'); }
+function finishIntro(){
+  clearTimeout(introTimer);
+  intro.classList.remove('play');
+  startBoot();
+}
+function playIntro(){
+  intro.classList.remove('play');
+  void intro.offsetWidth;
+  intro.classList.add('play');
+  clearTimeout(introTimer);
+  introTimer = setTimeout(finishIntro,4600);
+}
+intro.addEventListener('click',finishIntro);
+
+/* ---------- boot ---------- */
+(function boot(){
+  var saved = store.get('mm_theme');
+  if(saved === 'light' || saved === 'dark') setTheme(saved);
+  var sm = store.get('mm_mode');
+  renderChips();
+  if(sm && MODES[sm] && sm !== 'metro') setMode(sm);
+
+  var lines = [
+    '<span class="dim">метро:</span> <span class="acc">' + LIST.metro.length + '</span> <span class="dim">· мцд:</span> <span class="acc">' + LIST.mcd.length + '</span> <span class="dim">· трамваи и автобусы: любые остановки</span>',
+    '<span class="dim">время по москве (utc+3), модель: интервалы по часу и дню недели</span>',
+    'выбери вид транспорта внизу и введи станцию <span class="acc">↓</span>'
+  ];
+  bootEl = document.createElement('div');
+  bootEl.className = 'blk boot';
+  bootEl.innerHTML =
+    '<pre class="ban">┌────────────────────────────┐\n│ МЕТРО // ETA        v2.0   │\n└────────────────────────────┘</pre>' +
+    lines.map(function(l,i){ return '<div style="animation-delay:' + (0.1 + i*0.22).toFixed(2) + 's">' + l + '</div>'; }).join('');
+  log.appendChild(bootEl);
+  loop();
+  fit();
+
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce || sess.get('mm_intro') === '1'){
+    intro.classList.remove('play');
+    startBoot();
+  } else {
+    sess.set('mm_intro','1');
+    introTimer = setTimeout(finishIntro,4600);
+  }
+})();
+
+})();
+</script>
+</body>
+</html>
